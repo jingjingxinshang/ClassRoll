@@ -4,13 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
   <title>ClassRoll · 班级学号进度核对卡</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/tailwind.css">
   <!-- 引入 html2canvas 与 jsPDF 实现本地高清图片与标准 A4 PDF 导出 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="./assets/html2canvas.min.js"></script>
+  <script src="./assets/jspdf.umd.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
-
     :root {
       --bg-canvas: #F3F3F0;
       --surface: #FFFFFF;
@@ -24,7 +22,7 @@
     }
 
     body {
-      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
       background-color: var(--bg-canvas);
       background-image: radial-gradient(#D8D8D2 1px, transparent 1px);
       background-size: 16px 16px;
@@ -63,7 +61,6 @@
       top: 0;
       left: 0;
       transform-origin: top left;
-      transition: transform 0.15s ease;
     }
 
     /* 导出截取时强制锁定 1:1 真实尺寸并隐藏辅助按钮 */
@@ -207,6 +204,11 @@
       width: 100%;
       display: flex;
       flex-direction: column;
+    }
+
+    .cards-grid.hidden,
+    .roll-table-wrapper.hidden {
+      display: none;
     }
 
     .roll-table {
@@ -365,6 +367,24 @@
       background: #27272A;
     }
 
+    .toolbar-actions {
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 480px) {
+      .toolbar-main {
+        flex-wrap: wrap;
+      }
+      .toolbar-brand,
+      .toolbar-actions {
+        width: 100%;
+      }
+      .toolbar-actions button {
+        min-height: 36px;
+      }
+    }
+
     @media (hover: none) {
       .card-edit-btn {
         opacity: 0.85 !important;
@@ -436,9 +456,9 @@
     <div class="max-w-7xl mx-auto px-3 sm:px-5 py-2 flex flex-col gap-2">
       
       <!-- 始终可见的主操作栏 -->
-      <div class="flex items-center justify-between gap-2">
+      <div class="toolbar-main flex items-center justify-between gap-2">
         <!-- ClassRoll 极简品牌区 -->
-        <div class="flex items-center gap-2.5 shrink-0">
+        <div class="toolbar-brand flex items-center gap-2.5 shrink-0">
           <div class="w-7 h-7 rounded-[7px] bg-[#18181B] text-white flex items-center justify-center shrink-0">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
@@ -451,7 +471,7 @@
         </div>
 
         <!-- 右侧克制统一操作组 -->
-        <div class="flex items-center gap-1.5 overflow-x-auto">
+        <div class="toolbar-actions flex items-center gap-1.5">
           <!-- 移动端专属：展开/收起设置按钮 -->
           <button id="toggleSettingsBtn" type="button" aria-expanded="false" class="md:hidden ui-btn-secondary">
             <span id="toggleSettingsText">设置 ▾</span>
@@ -832,7 +852,7 @@
     function updateMobileScale() {
       if (a4Sheet.classList.contains('exporting-mode')) return;
       const horizontalPadding = window.innerWidth <= 768 ? 16 : 40;
-      const availableWidth = Math.max(260, document.documentElement.clientWidth - horizontalPadding);
+      const availableWidth = Math.max(1, document.documentElement.clientWidth - horizontalPadding);
       const sheetRectWidth = a4Sheet.offsetWidth || 794;
       const sheetRectHeight = a4Sheet.offsetHeight || 1123;
 

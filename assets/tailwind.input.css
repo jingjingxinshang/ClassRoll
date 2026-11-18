@@ -1,0 +1,6 @@
+/* Regenerate after changing utility classes in index.html:
+   npx -p tailwindcss@3.4.17 tailwindcss -i ./assets/tailwind.input.css -o ./assets/tailwind.css --content ./index.html --minify
+*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
