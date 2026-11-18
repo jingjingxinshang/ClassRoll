@@ -22,32 +22,37 @@
     /* 移动端等比缩放外层包装器 */
     .a4-scaler-box {
       position: relative;
-      margin: 10px auto 24px;
+      margin: 0 auto;
       width: 210mm;
       height: 297mm;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
+      overflow: hidden;
+      flex-shrink: 0;
     }
 
-    /* 标准 A4 纸张物理尺寸 (210mm x 297mm) */
+    /* 标准 A4 纸张物理尺寸 (210mm x 297mm，锁定不可被 Flex 压窄变形) */
     .a4-sheet {
-      width: 210mm;
-      min-height: 297mm;
-      height: 297mm;
+      width: 210mm !important;
+      min-width: 210mm !important;
+      max-width: 210mm !important;
+      min-height: 297mm !important;
+      height: 297mm !important;
+      flex-shrink: 0 !important;
       padding: 8mm 7.5mm 7mm 7.5mm;
       background: #ffffff;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      position: relative;
-      transform-origin: top center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: top left;
       transition: transform 0.15s ease;
     }
 
     /* 导出截取时强制锁定 1:1 真实尺寸并隐藏辅助按钮 */
     .a4-sheet.exporting-mode {
+      position: relative !important;
       transform: none !important;
       box-shadow: none !important;
       margin: 0 !important;
@@ -649,48 +654,42 @@
   <div id="toastBanner" class="no-print hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs sm:text-sm px-4 py-2.5 rounded-full shadow-lg transition"></div>
 
   <script>
-    /**
-     * ClassRoll 核心应用状态
-     */
+    // 全局应用状态初始化
     const state = {
-      viewMode: 'cards',          // 'cards' (卡片平铺) | 'table' (列表汇总表)
-      layout: '2x4',              // 默认 8格/页 (2×4)
-      colsPerRow: 10,             // 每行默认 10 个学号
-      numStyle: 'plain',          // 默认纯数字 (1)
-      showCutLines: true,         // 裁剪虚线
-      showRemark: true,           // 底部备注栏
-      pageTitle: '一年级 4 班',    // 默认页面标题
-      titleAlign: 'center',       // 标题对齐: 'left' | 'center' | 'right'
-      numMode: 'range',           // 'range' | 'custom'
+      viewMode: 'cards',
+      layout: '2x4',
+      colsPerRow: 10,
+      numStyle: 'plain',
+      showCutLines: true,
+      showRemark: true,
+      dateCols: 15,
+      pageTitle: '一年级 4 班',
+      titleAlign: 'center',
+      numMode: 'range',
       startNum: 1,
       endNum: 44,
       customRaw: '',
       batchDate: '',
       batchTask: '',
       batchRemark: '',
-      cardLists: [],              // 每张卡片独立学号数组
-      cardTexts: [],              // 每张卡片独立 { date, task, remark }
-      dateCols: 15,               // 汇总表日期列数
-      tableHeaders: [],           // 汇总表第一行日期表头
-      tableMarks: {},             // 汇总表单元格标记 { "rowIdx_colIdx": "✓" }
+      cardLists: [],
+      cardTexts: [],
+      tableHeaders: [],
+      tableMarks: {},
       editingCardIndex: null,
-      mobileSettingsOpen: false,  // 移动端设置面板默认收起
+      mobileSettingsOpen: false,
       lastExportUrl: null
     };
 
-    // DOM 元素引用
-    const previewStage = document.getElementById('previewStage');
-    const a4ScalerBox = document.getElementById('a4ScalerBox');
-    const a4Sheet = document.getElementById('a4Sheet');
-    const a4PageHeader = document.getElementById('a4PageHeader');
-    const cardsGrid = document.getElementById('cardsGrid');
-    const rollTableWrapper = document.getElementById('rollTableWrapper');
-
-    // 移动端折叠控制 DOM
+    // 核心 DOM 元素引用
     const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
     const toggleSettingsText = document.getElementById('toggleSettingsText');
     const collapsibleControls = document.getElementById('collapsibleControls');
     const collapseSettingsBottomBtn = document.getElementById('collapseSettingsBottomBtn');
+
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    const exportImgBtn = document.getElementById('exportImgBtn');
+    const printBtn = document.getElementById('printBtn');
 
     const viewModeSelect = document.getElementById('viewModeSelect');
     const cardModeControls = document.getElementById('cardModeControls');
@@ -709,7 +708,6 @@
     const modeCustomBtn = document.getElementById('modeCustomBtn');
     const rangeControls = document.getElementById('rangeControls');
     const customControls = document.getElementById('customControls');
-
     const startNumInput = document.getElementById('startNumInput');
     const endNumInput = document.getElementById('endNumInput');
     const applyRangeBtn = document.getElementById('applyRangeBtn');
@@ -717,6 +715,7 @@
     const applyCustomBtn = document.getElementById('applyCustomBtn');
 
     const toggleBatchBtn = document.getElementById('toggleBatchBtn');
+    const clearMarksBtn = document.getElementById('clearMarksBtn');
     const batchPanel = document.getElementById('batchPanel');
     const batchCardFields = document.getElementById('batchCardFields');
     const batchTableFields = document.getElementById('batchTableFields');
@@ -727,12 +726,12 @@
     const batchTableDatesInput = document.getElementById('batchTableDatesInput');
     const applyBatchTableBtn = document.getElementById('applyBatchTableBtn');
 
-    const clearMarksBtn = document.getElementById('clearMarksBtn');
-    const exportPdfBtn = document.getElementById('exportPdfBtn');
-    const exportImgBtn = document.getElementById('exportImgBtn');
-    const printBtn = document.getElementById('printBtn');
+    const a4ScalerBox = document.getElementById('a4ScalerBox');
+    const a4Sheet = document.getElementById('a4Sheet');
+    const a4PageHeader = document.getElementById('a4PageHeader');
+    const cardsGrid = document.getElementById('cardsGrid');
+    const rollTableWrapper = document.getElementById('rollTableWrapper');
 
-    // 导出预览弹窗 DOM
     const exportModal = document.getElementById('exportModal');
     const exportModalTitle = document.getElementById('exportModalTitle');
     const exportModalHint = document.getElementById('exportModalHint');
@@ -742,75 +741,69 @@
     const closeExportModalBtn = document.getElementById('closeExportModalBtn');
     const closeExportModalFooterBtn = document.getElementById('closeExportModalFooterBtn');
 
-    // 单卡修改弹窗 DOM
     const singleCardModal = document.getElementById('singleCardModal');
     const modalCardTitle = document.getElementById('modalCardTitle');
     const modalRangeInput = document.getElementById('modalRangeInput');
     const modalGenRangeBtn = document.getElementById('modalGenRangeBtn');
     const modalListTextarea = document.getElementById('modalListTextarea');
+    const saveModalBtn = document.getElementById('saveModalBtn');
     const closeModalBtn = document.getElementById('closeModalBtn');
     const cancelModalBtn = document.getElementById('cancelModalBtn');
-    const saveModalBtn = document.getElementById('saveModalBtn');
+
     const toastBanner = document.getElementById('toastBanner');
+    let toastTimer = null;
 
     /**
-     * 轻量底部提示框（替代 alert）
+     * 显示底部轻量提示条
      */
-    let toastTimer = null;
     function showToast(msg) {
       toastBanner.textContent = msg;
       toastBanner.classList.remove('hidden');
-      clearTimeout(toastTimer);
+      if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
         toastBanner.classList.add('hidden');
-      }, 2800);
+      }, 2400);
     }
 
     /**
-     * 移动端设置面板展开/收起切换（桌面端 >768px 始终通过 md:flex 保持展开）
+     * 切换移动端设置面板展开/收起状态
      */
-    function setMobileSettingsOpen(isOpen) {
-      state.mobileSettingsOpen = isOpen;
-      if (isOpen) {
+    function setMobileSettingsOpen(open) {
+      state.mobileSettingsOpen = open;
+      toggleSettingsBtn.setAttribute('aria-expanded', String(open));
+      if (open) {
         collapsibleControls.classList.remove('hidden');
         collapsibleControls.classList.add('flex');
-        toggleSettingsText.textContent = '收起 ▲';
-        toggleSettingsBtn.setAttribute('aria-expanded', 'true');
-        toggleSettingsBtn.classList.remove('bg-slate-100', 'text-slate-800', 'border-slate-300');
-        toggleSettingsBtn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-300');
+        toggleSettingsText.textContent = '收起 ▴';
       } else {
         collapsibleControls.classList.add('hidden');
         collapsibleControls.classList.remove('flex');
         toggleSettingsText.textContent = '设置 ▾';
-        toggleSettingsBtn.setAttribute('aria-expanded', 'false');
-        toggleSettingsBtn.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-300');
-        toggleSettingsBtn.classList.add('bg-slate-100', 'text-slate-800', 'border-slate-300');
       }
       requestAnimationFrame(updateMobileScale);
     }
 
     /**
-     * 移动端屏幕自适应等比缩放 A4 纸张（铺满约 96% 屏幕宽度，无多余左右留白）
+     * 移动端屏幕自适应等比缩放 A4 纸张（锁定 210:297 标准 A4 比例，严防压窄变形）
      */
     function updateMobileScale() {
       if (a4Sheet.classList.contains('exporting-mode')) return;
-      const stageWidth = previewStage ? previewStage.clientWidth : window.innerWidth;
       const horizontalPadding = window.innerWidth <= 768 ? 16 : 32;
-      const availableWidth = Math.max(280, stageWidth - horizontalPadding);
+      const availableWidth = Math.max(260, document.documentElement.clientWidth - horizontalPadding);
       const sheetRectWidth = a4Sheet.offsetWidth || 794;
       const sheetRectHeight = a4Sheet.offsetHeight || 1123;
 
       if (availableWidth < sheetRectWidth) {
         const scale = availableWidth / sheetRectWidth;
+        const scaledW = Math.floor(sheetRectWidth * scale);
+        const scaledH = Math.ceil(sheetRectHeight * scale);
+        a4ScalerBox.style.width = `${scaledW}px`;
+        a4ScalerBox.style.height = `${scaledH}px`;
         a4Sheet.style.transform = `scale(${scale})`;
-        a4ScalerBox.style.width = `${Math.floor(sheetRectWidth * scale)}px`;
-        a4ScalerBox.style.height = `${Math.ceil(sheetRectHeight * scale)}px`;
-        a4ScalerBox.style.margin = '0 auto';
       } else {
+        a4ScalerBox.style.width = `${sheetRectWidth}px`;
+        a4ScalerBox.style.height = `${sheetRectHeight}px`;
         a4Sheet.style.transform = 'none';
-        a4ScalerBox.style.width = '210mm';
-        a4ScalerBox.style.height = '297mm';
-        a4ScalerBox.style.margin = '0 auto';
       }
     }
 
