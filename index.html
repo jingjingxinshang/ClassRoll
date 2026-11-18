@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+  <title>ClassRoll · 班级学号进度核对卡 A4 打印与导出工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 html2canvas 与 jsPDF 实现本地高清图片与标准 A4 PDF 导出 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+    body {
+      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #e5e7eb;
+      color: #1f2937;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* 移动端等比缩放外层包装器 */
+    .a4-scaler-box {
+      position: relative;
+      margin: 14px auto 28px;
+      width: 210mm;
+      height: 297mm;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    /* 标准 A4 纸张物理尺寸 (210mm x 297mm) */
+    .a4-sheet {
+      width: 210mm;
+      min-height: 297mm;
+      height: 297mm;
+      padding: 8mm 8mm 7mm 8mm;
+      background: #ffffff;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transform-origin: top center;
+      transition: transform 0.15s ease;
+    }
+
+    /* 导出截取时强制锁定 1:1 真实尺寸并隐藏辅助按钮 */
+    .a4-sheet.exporting-mode {
+      transform: none !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+    }
+    .a4-sheet.exporting-mode .no-export {
+      display: none !important;
+    }
+
+    /* A4 整页顶部班级标题（紧凑 11.5pt 字号，充足上下间距防裁切） */
+    .a4-page-header {
+      text-align: center;
+      font-size: 11.5pt;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: 0.05em;
+      padding: 1mm 1.5mm 2mm 1.5mm;
+      margin-bottom: 3mm;
+      border-bottom: 1.5px solid #4b5563;
+      flex-shrink: 0;
+      outline: none;
+      line-height: 1.4;
+      transition: background-color 0.15s ease;
+    }
+    .a4-page-header:focus {
+      background-color: #eff6ff;
+    }
+
+    /* 1. 卡片平铺网格容器 */
+    .cards-grid {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      gap: 5.5mm;
+      width: 100%;
+    }
+
+    .check-card {
+      border: 1.5px solid #374151;
+      border-radius: 6px;
+      padding: 3.2mm 3.8mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background-color: #ffffff;
+      position: relative;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    /* 裁剪引导虚线 */
+    .show-cut-lines .check-card::after {
+      content: '';
+      position: absolute;
+      inset: -2.75mm;
+      border: 1px dashed #9ca3af;
+      pointer-events: none;
+    }
+
+    /* 可编辑横线 */
+    .editable-line {
+      border-bottom: 1.5px solid #374151;
+      min-height: 1.4em;
+      line-height: 1.35;
+      padding: 0 4px;
+      outline: none;
+      transition: background-color 0.15s ease;
+    }
+    .editable-line:focus {
+      background-color: #eff6ff;
+    }
+
+    /* 学号矩阵网格 */
+    .num-grid {
+      display: grid !important;
+      grid-auto-flow: row;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      align-items: center;
+      justify-items: center;
+      margin: 1.2mm 0;
+      gap: 1px;
+    }
+
+    .num-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: #111827;
+      user-select: none;
+      position: relative;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 浅灰虚线圈样式 */
+    .num-cell.style-dashed::after {
+      content: '';
+      position: absolute;
+      width: 23px;
+      height: 23px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 9999px;
+      pointer-events: none;
+    }
+
+    /* 点击模拟红笔画圈标记 */
+    .num-cell.circled::before {
+      content: '';
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border: 2px solid #dc2626;
+      border-radius: 9999px;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* 2. 列表模式（整页汇总表）样式 */
+    .roll-table-wrapper {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .roll-table {
+      width: 100%;
+      height: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1.5px solid #1f2937;
+    }
+
+    .roll-table th,
+    .roll-table td {
+      border: 1px solid #374151;
+      text-align: center;
+      vertical-align: middle;
+      padding: 0 1px;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+
+    /* 方案 A：标准防压字对角斜线表头单元格 (首列宽 16mm，表头高 10mm) */
+    .diagonal-header-cell {
+      width: 16mm;
+      height: 10mm;
+      position: relative;
+      background-color: #f8fafc;
+      padding: 0 !important;
+      /* 绘制从左上 (0,0) 到右下 (100%,100%) 的清晰斜线，避开右上与左下文字 */
+      background-image: linear-gradient(
+        to top right,
+        transparent calc(50% - 0.65px),
+        #374151 calc(50% - 0.65px),
+        #374151 calc(50% + 0.65px),
+        transparent calc(50% + 0.65px)
+      );
+    }
+
+    /* 右上角：日期 */
+    .diag-top-right {
+      position: absolute;
+      top: 1.2mm;
+      right: 1.4mm;
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #1f2937;
+      line-height: 1;
+      user-select: none;
+    }
+
+    /* 左下角：学号 */
+    .diag-bottom-left {
+      position: absolute;
+      bottom: 1.2mm;
+      left: 1.4mm;
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #1f2937;
+      line-height: 1;
+      user-select: none;
+    }
+
+    /* 顶部日期表头格子 */
+    .date-col-header {
+      height: 10mm;
+      background-color: #f8fafc;
+      font-size: 8pt;
+      font-weight: 600;
+      color: #111827;
+      outline: none;
+      line-height: 1.15;
+      word-break: break-all;
+    }
+    .date-col-header:focus {
+      background-color: #eff6ff;
+    }
+
+    /* 左侧学号列格子 */
+    .student-id-cell {
+      width: 16mm;
+      font-weight: 700;
+      font-size: 8.5pt;
+      color: #111827;
+      background-color: #f9fafb;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+
+    /* 汇总表内部标记格子 */
+    .mark-grid-cell {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: #16a34a;
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mark-grid-cell:focus {
+      background-color: #eff6ff;
+    }
+    .mark-grid-cell[data-mark="✗"] {
+      color: #dc2626;
+    }
+
+    /* 触摸屏设备直接显示单卡修改按钮，无需 hover */
+    @media (hover: none) {
+      .card-edit-btn {
+        opacity: 1 !important;
+      }
+    }
+
+    /* 原生 A4 打印样式 */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 0;
+      }
+
+      html, body {
+        width: 210mm !important;
+        height: 297mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .a4-scaler-box {
+        width: 210mm !important;
+        height: 297mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .a4-sheet {
+        transform: none !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+
+      .editable-line,
+      .date-col-header,
+      .mark-grid-cell,
+      .a4-page-header {
+        background-color: transparent !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- 顶部控制面板（电脑端全展开；移动端默认收起，仅留预览、导出/打印与“调整设置”按钮） -->
+  <header class="no-print bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-2">
+      
+      <!-- 始终可见的主操作栏：品牌标识 + 调整设置切换（移动端） + 导出/打印主按钮 -->
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <!-- ClassRoll 品牌区 -->
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <h1 class="text-sm sm:text-base font-bold text-gray-900 leading-tight">ClassRoll</h1>
+              <span class="hidden sm:inline-block text-[11px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">A4 学号核对卡</span>
+            </div>
+            <p class="text-[11px] text-gray-500 hidden md:block">班级学号进度核对卡 · 方便老师画圈标记</p>
+          </div>
+        </div>
+
+        <!-- 右侧核心动作组：移动端设置折叠按钮 + 导出 PDF / 导出图片 / 打印 A4 -->
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+          <!-- 移动端专属：展开/收起所有修改设置按钮 -->
+          <button id="toggleSettingsBtn" type="button" aria-expanded="false" class="md:hidden px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-[0.99] text-slate-800 border border-slate-300 font-semibold flex items-center gap-1 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+            </svg>
+            <span id="toggleSettingsText">调整设置 ▾</span>
+          </button>
+
+          <button id="exportPdfBtn" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 transition cursor-pointer">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <span>导出 PDF</span>
+          </button>
+
+          <button id="exportImgBtn" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 transition cursor-pointer">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <span>导出图片</span>
+          </button>
+
+          <button id="printBtn" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 transition cursor-pointer">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+            </svg>
+            <span>打印 A4</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 可折叠详细修改项容器：移动端默认 hidden，电脑端 (md:flex) 始终全部展示 -->
+      <div id="collapsibleControls" class="hidden md:flex flex-col gap-2 pt-1.5 md:pt-0 border-t md:border-t-0 border-gray-100">
+        
+        <!-- 排版模式 + 平铺密度/列数 + 样式 + 批量填字 -->
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+          <!-- 视图模式切换 -->
+          <div class="flex items-center gap-1 bg-blue-50/90 px-2 py-1 rounded-lg border border-blue-200">
+            <label for="viewModeSelect" class="text-blue-900 font-semibold whitespace-nowrap">模式:</label>
+            <select id="viewModeSelect" class="bg-transparent font-bold text-blue-700 focus:outline-none cursor-pointer">
+              <option value="cards" selected>卡片平铺</option>
+              <option value="table">列表模式 (汇总表)</option>
+            </select>
+          </div>
+
+          <!-- 卡片模式专属选项组 -->
+          <div id="cardModeControls" class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <div class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
+              <label for="layoutSelect" class="text-gray-600 font-medium whitespace-nowrap">平铺:</label>
+              <select id="layoutSelect" class="bg-transparent font-semibold text-gray-900 focus:outline-none cursor-pointer">
+                <option value="2x2">4格/页 (2×2)</option>
+                <option value="2x3">6格/页 (2×3)</option>
+                <option value="2x4" selected>8格/页 (2×4)</option>
+              </select>
+            </div>
+
+            <div class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
+              <label for="colsPerRowSelect" class="text-gray-600 font-medium whitespace-nowrap">每行:</label>
+              <select id="colsPerRowSelect" class="bg-transparent font-semibold text-gray-900 focus:outline-none cursor-pointer">
+                <option value="5">5 个</option>
+                <option value="8">8 个</option>
+                <option value="10" selected>10 个</option>
+                <option value="12">12 个</option>
+              </select>
+            </div>
+
+            <div class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
+              <label for="numStyleSelect" class="text-gray-600 font-medium whitespace-nowrap">样式:</label>
+              <select id="numStyleSelect" class="bg-transparent font-semibold text-gray-900 focus:outline-none cursor-pointer">
+                <option value="plain" selected>纯数字 (1)</option>
+                <option value="dot">带点号 (1.)</option>
+                <option value="dashed">虚线圈 (①)</option>
+              </select>
+            </div>
+
+            <label class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 cursor-pointer select-none">
+              <input type="checkbox" id="cutLineToggle" checked class="rounded text-blue-600 focus:ring-blue-500">
+              <span class="text-gray-700 font-medium">裁剪虚线</span>
+            </label>
+
+            <label class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 cursor-pointer select-none">
+              <input type="checkbox" id="remarkToggle" checked class="rounded text-blue-600 focus:ring-blue-500">
+              <span class="text-gray-700 font-medium">备注栏</span>
+            </label>
+          </div>
+
+          <!-- 列表模式（汇总表）专属选项组 -->
+          <div id="tableModeControls" class="hidden flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <div class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
+              <label for="dateColsInput" class="text-gray-600 font-medium whitespace-nowrap">日期列数:</label>
+              <input type="number" id="dateColsInput" value="15" min="3" max="35" class="w-12 text-center bg-white rounded border border-gray-300 font-semibold text-gray-900 focus:outline-none focus:border-blue-500">
+            </div>
+          </div>
+
+          <!-- 批量填写与清空按钮 -->
+          <button id="toggleBatchBtn" type="button" class="px-2.5 py-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition cursor-pointer">
+            批量填日期 / 内容
+          </button>
+
+          <button id="clearMarksBtn" type="button" class="px-2.5 py-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition cursor-pointer">
+            清空重置
+          </button>
+        </div>
+
+        <!-- 班级标题与学号自定义设置条 -->
+        <div class="flex flex-wrap items-center gap-2 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs sm:text-sm">
+          <!-- A4 整页班级标题与位置控制 -->
+          <div class="flex flex-wrap items-center gap-1.5 pr-2 border-r border-slate-200">
+            <label for="pageTitleInput" class="font-semibold text-slate-800 whitespace-nowrap">页面标题:</label>
+            <input type="text" id="pageTitleInput" value="一年级 4 班" placeholder="留空则隐藏" class="w-28 sm:w-32 px-2 py-1 rounded border border-gray-300 bg-white text-gray-900 font-medium focus:outline-none focus:border-blue-500">
+            <div class="inline-flex rounded-md bg-slate-200/80 p-0.5" title="选择标题在A4纸顶部的位置">
+              <button type="button" data-align="left" class="title-align-btn px-2 py-0.5 rounded text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer">左上</button>
+              <button type="button" data-align="center" class="title-align-btn px-2 py-0.5 rounded text-xs font-semibold bg-white text-blue-600 shadow-sm transition cursor-pointer">居中</button>
+              <button type="button" data-align="right" class="title-align-btn px-2 py-0.5 rounded text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer">右上</button>
+            </div>
+          </div>
+
+          <!-- 学号范围 / 自由列表自定义（无步长） -->
+          <div class="flex items-center gap-1.5 font-semibold text-slate-800">
+            <span>学号:</span>
+            <div class="inline-flex rounded-md bg-slate-200/80 p-0.5">
+              <button type="button" id="modeRangeBtn" class="px-2 py-0.5 rounded text-xs font-semibold bg-white text-blue-600 shadow-sm transition cursor-pointer">连续范围</button>
+              <button type="button" id="modeCustomBtn" class="px-2 py-0.5 rounded text-xs font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer">自由/跳号</button>
+            </div>
+          </div>
+
+          <!-- 模式 1：连续范围控制项 -->
+          <div id="rangeControls" class="flex flex-wrap items-center gap-1.5">
+            <div class="flex items-center gap-1">
+              <label for="startNumInput" class="text-gray-600">起始:</label>
+              <input type="number" id="startNumInput" value="1" class="w-14 px-1.5 py-0.5 rounded border border-gray-300 bg-white text-center font-semibold focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="flex items-center gap-1">
+              <label for="endNumInput" class="text-gray-600">结束:</label>
+              <input type="number" id="endNumInput" value="44" class="w-14 px-1.5 py-0.5 rounded border border-gray-300 bg-white text-center font-semibold focus:outline-none focus:border-blue-500">
+            </div>
+            <button id="applyRangeBtn" type="button" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs transition cursor-pointer">
+              应用学号
+            </button>
+          </div>
+
+          <!-- 模式 2：自由/跳号列表控制项 -->
+          <div id="customControls" class="hidden flex-1 flex flex-wrap items-center gap-1.5 min-w-[220px]">
+            <input type="text" id="customListInput" placeholder="支持跳号与简写，如：1~15, 17~44" class="flex-1 min-w-[180px] px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-900 focus:outline-none focus:border-blue-500">
+            <button id="applyCustomBtn" type="button" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs transition cursor-pointer">
+              生成学号
+            </button>
+          </div>
+        </div>
+
+        <!-- 展开式批量填写栏（根据模式自适应提示） -->
+        <div id="batchPanel" class="hidden bg-blue-50/90 rounded-lg border border-blue-200">
+          <div id="batchCardFields" class="px-3 py-2 flex flex-wrap items-center gap-2.5 text-xs sm:text-sm">
+            <span class="font-semibold text-blue-900">批量填卡片：</span>
+            <div class="flex items-center gap-1">
+              <label class="text-gray-700">日期：</label>
+              <input type="text" id="batchDateInput" placeholder="例如：11月18日" class="px-2 py-1 rounded border border-gray-300 bg-white text-gray-900 w-24 sm:w-28 focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="flex items-center gap-1">
+              <label class="text-gray-700">内容：</label>
+              <input type="text" id="batchTaskInput" placeholder="例如：默写生字 / 收练习册" class="px-2 py-1 rounded border border-gray-300 bg-white text-gray-900 w-36 sm:w-44 focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="flex items-center gap-1">
+              <label class="text-gray-700">备注：</label>
+              <input type="text" id="batchRemarkInput" placeholder="可选备注" class="px-2 py-1 rounded border border-gray-300 bg-white text-gray-900 w-28 sm:w-36 focus:outline-none focus:border-blue-500">
+            </div>
+            <button id="applyBatchCardBtn" type="button" class="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition cursor-pointer">
+              填入全部卡片
+            </button>
+          </div>
+
+          <div id="batchTableFields" class="hidden px-3 py-2 flex flex-wrap items-center gap-2.5 text-xs sm:text-sm">
+            <span class="font-semibold text-blue-900">批量填表头日期：</span>
+            <input type="text" id="batchTableDatesInput" placeholder="用空格或逗号分隔多个日期，如：11.18 11.19 11.20 11.21" class="flex-1 min-w-[200px] max-w-lg px-2.5 py-1 rounded border border-gray-300 bg-white text-gray-900 focus:outline-none focus:border-blue-500">
+            <button id="applyBatchTableBtn" type="button" class="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition cursor-pointer">
+              填入第一行日期
+            </button>
+          </div>
+        </div>
+
+        <!-- 移动端专属：设置面板底部一键收起按钮 -->
+        <button id="collapseSettingsBottomBtn" type="button" class="md:hidden w-full py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200 transition cursor-pointer">
+          ▲ 收起设置
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- A4 纸张自适应缩放预览区 -->
+  <main class="flex-1 w-full overflow-x-hidden flex justify-center items-start px-2 sm:px-4">
+    <div id="a4ScalerBox" class="a4-scaler-box">
+      <div id="a4Sheet" class="a4-sheet show-cut-lines">
+        <!-- 整张 A4 纸顶部班级标题 -->
+        <div id="a4PageHeader" class="a4-page-header" contenteditable="true" spellcheck="false" title="点击可直接修改班级标题">一年级 4 班</div>
+        <!-- 卡片平铺容器 -->
+        <div id="cardsGrid" class="cards-grid"></div>
+        <!-- 列表模式（整页汇总表）容器 -->
+        <div id="rollTableWrapper" class="roll-table-wrapper hidden"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 导出结果预览与手机长按保存/下载弹窗（确保沙盒 iFrame 与手机端 100% 可保存） -->
+  <div id="exportModal" class="no-print hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <div>
+          <h3 id="exportModalTitle" class="font-bold text-gray-900 text-sm sm:text-base">导出就绪</h3>
+          <p id="exportModalHint" class="text-xs text-gray-500">若浏览器未自动下载，请点击下方按钮或长按预览图保存</p>
+        </div>
+        <button type="button" id="closeExportModalBtn" class="w-8 h-8 rounded-full hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center text-xl leading-none cursor-pointer">×</button>
+      </div>
+
+      <!-- 预览内容区 -->
+      <div class="flex-1 overflow-auto bg-slate-100 p-4 flex flex-col items-center justify-center min-h-[260px]">
+        <div id="exportLoadingSpinner" class="flex flex-col items-center gap-2 text-slate-600">
+          <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-sm font-medium">正在生成高清 A4 文件，请稍候...</span>
+        </div>
+        <img id="exportPreviewImg" alt="A4 导出预览图" class="hidden max-h-[60vh] w-auto object-contain rounded shadow-md border border-gray-300 bg-white">
+      </div>
+
+      <!-- 底部下载操作栏 -->
+      <div class="px-4 py-3 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between gap-2">
+        <span class="text-xs text-slate-500">📱 长按图片可保存或转发微信打印</span>
+        <div class="flex items-center gap-2 ml-auto">
+          <a id="directDownloadLink" href="#" download="ClassRoll-一年级 4 班.png" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition">
+            立即下载文件
+          </a>
+          <button type="button" id="closeExportModalFooterBtn" class="px-3.5 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-xs sm:text-sm cursor-pointer">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 单张卡片独立自定义学号弹窗 -->
+  <div id="singleCardModal" class="no-print hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px] flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md p-4 sm:p-5 flex flex-col gap-3.5">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-2">
+        <h3 id="modalCardTitle" class="font-bold text-gray-900 text-base">自定义第 1 张卡片学号</h3>
+        <button type="button" id="closeModalBtn" class="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer">×</button>
+      </div>
+      
+      <div class="flex flex-col gap-3 text-xs sm:text-sm">
+        <div>
+          <label class="block font-medium text-gray-700 mb-1">快速输入连续范围（如 <code class="bg-gray-100 px-1 rounded">1~44</code>）：</label>
+          <div class="flex gap-2">
+            <input type="text" id="modalRangeInput" placeholder="例如：1~44" class="flex-1 px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500">
+            <button type="button" id="modalGenRangeBtn" class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium cursor-pointer">填入下方</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-medium text-gray-700 mb-1">或编辑本卡完整学号（支持空格、逗号或 <code class="bg-gray-100 px-1 rounded">1~15, 17~44</code> 跳号）：</label>
+          <textarea id="modalListTextarea" rows="4" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500 font-mono text-xs" placeholder="1 2 3 4 5..."></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+        <button type="button" id="cancelModalBtn" class="px-3.5 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-xs sm:text-sm cursor-pointer">取消</button>
+        <button type="button" id="saveModalBtn" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm cursor-pointer">保存本卡学号</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示消息框（替代 alert） -->
+  <div id="toastBanner" class="no-print hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs sm:text-sm px-4 py-2.5 rounded-full shadow-lg transition"></div>
+
+  <script>
+    /**
+     * ClassRoll 核心应用状态
+     */
+    const state = {
+      viewMode: 'cards',          // 'cards' (卡片平铺) | 'table' (列表汇总表)
+      layout: '2x4',              // 默认 8格/页 (2×4)
+      colsPerRow: 10,             // 每行默认 10 个学号
+      numStyle: 'plain',          // 默认纯数字 (1)
+      showCutLines: true,         // 裁剪虚线
+      showRemark: true,           // 底部备注栏
+      pageTitle: '一年级 4 班',    // 默认页面标题
+      titleAlign: 'center',       // 标题对齐: 'left' | 'center' | 'right'
+      numMode: 'range',           // 'range' | 'custom'
+      startNum: 1,
+      endNum: 44,
+      customRaw: '',
+      batchDate: '',
+      batchTask: '',
+      batchRemark: '',
+      cardLists: [],              // 每张卡片独立学号数组
+      cardTexts: [],              // 每张卡片独立 { date, task, remark }
+      dateCols: 15,               // 汇总表日期列数
+      tableHeaders: [],           // 汇总表第一行日期表头
+      tableMarks: {},             // 汇总表单元格标记 { "rowIdx_colIdx": "✓" }
+      editingCardIndex: null,
+      mobileSettingsOpen: false,  // 移动端设置面板默认收起
+      lastExportUrl: null
+    };
+
+    // DOM 元素引用
+    const a4ScalerBox = document.getElementById('a4ScalerBox');
+    const a4Sheet = document.getElementById('a4Sheet');
+    const a4PageHeader = document.getElementById('a4PageHeader');
+    const cardsGrid = document.getElementById('cardsGrid');
+    const rollTableWrapper = document.getElementById('rollTableWrapper');
+
+    // 移动端折叠控制 DOM
+    const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+    const toggleSettingsText = document.getElementById('toggleSettingsText');
+    const collapsibleControls = document.getElementById('collapsibleControls');
+    const collapseSettingsBottomBtn = document.getElementById('collapseSettingsBottomBtn');
+
+    const viewModeSelect = document.getElementById('viewModeSelect');
+    const cardModeControls = document.getElementById('cardModeControls');
+    const tableModeControls = document.getElementById('tableModeControls');
+    const layoutSelect = document.getElementById('layoutSelect');
+    const colsPerRowSelect = document.getElementById('colsPerRowSelect');
+    const numStyleSelect = document.getElementById('numStyleSelect');
+    const cutLineToggle = document.getElementById('cutLineToggle');
+    const remarkToggle = document.getElementById('remarkToggle');
+    const dateColsInput = document.getElementById('dateColsInput');
+
+    const pageTitleInput = document.getElementById('pageTitleInput');
+    const titleAlignBtns = document.querySelectorAll('.title-align-btn');
+
+    const modeRangeBtn = document.getElementById('modeRangeBtn');
+    const modeCustomBtn = document.getElementById('modeCustomBtn');
+    const rangeControls = document.getElementById('rangeControls');
+    const customControls = document.getElementById('customControls');
+
+    const startNumInput = document.getElementById('startNumInput');
+    const endNumInput = document.getElementById('endNumInput');
+    const applyRangeBtn = document.getElementById('applyRangeBtn');
+    const customListInput = document.getElementById('customListInput');
+    const applyCustomBtn = document.getElementById('applyCustomBtn');
+
+    const toggleBatchBtn = document.getElementById('toggleBatchBtn');
+    const batchPanel = document.getElementById('batchPanel');
+    const batchCardFields = document.getElementById('batchCardFields');
+    const batchTableFields = document.getElementById('batchTableFields');
+    const batchDateInput = document.getElementById('batchDateInput');
+    const batchTaskInput = document.getElementById('batchTaskInput');
+    const batchRemarkInput = document.getElementById('batchRemarkInput');
+    const applyBatchCardBtn = document.getElementById('applyBatchCardBtn');
+    const batchTableDatesInput = document.getElementById('batchTableDatesInput');
+    const applyBatchTableBtn = document.getElementById('applyBatchTableBtn');
+
+    const clearMarksBtn = document.getElementById('clearMarksBtn');
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    const exportImgBtn = document.getElementById('exportImgBtn');
+    const printBtn = document.getElementById('printBtn');
+
+    // 导出预览弹窗 DOM
+    const exportModal = document.getElementById('exportModal');
+    const exportModalTitle = document.getElementById('exportModalTitle');
+    const exportModalHint = document.getElementById('exportModalHint');
+    const exportLoadingSpinner = document.getElementById('exportLoadingSpinner');
+    const exportPreviewImg = document.getElementById('exportPreviewImg');
+    const directDownloadLink = document.getElementById('directDownloadLink');
+    const closeExportModalBtn = document.getElementById('closeExportModalBtn');
+    const closeExportModalFooterBtn = document.getElementById('closeExportModalFooterBtn');
+
+    // 单卡修改弹窗 DOM
+    const singleCardModal = document.getElementById('singleCardModal');
+    const modalCardTitle = document.getElementById('modalCardTitle');
+    const modalRangeInput = document.getElementById('modalRangeInput');
+    const modalGenRangeBtn = document.getElementById('modalGenRangeBtn');
+    const modalListTextarea = document.getElementById('modalListTextarea');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+    const saveModalBtn = document.getElementById('saveModalBtn');
+    const toastBanner = document.getElementById('toastBanner');
+
+    /**
+     * 轻量底部提示框（替代 alert）
+     */
+    let toastTimer = null;
+    function showToast(msg) {
+      toastBanner.textContent = msg;
+      toastBanner.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastBanner.classList.add('hidden');
+      }, 2800);
+    }
+
+    /**
+     * 移动端设置面板展开/收起切换（桌面端 >768px 始终通过 md:flex 保持展开）
+     */
+    function setMobileSettingsOpen(isOpen) {
+      state.mobileSettingsOpen = isOpen;
+      if (isOpen) {
+        collapsibleControls.classList.remove('hidden');
+        collapsibleControls.classList.add('flex');
+        toggleSettingsText.textContent = '收起设置 ▲';
+        toggleSettingsBtn.setAttribute('aria-expanded', 'true');
+        toggleSettingsBtn.classList.remove('bg-slate-100', 'text-slate-800', 'border-slate-300');
+        toggleSettingsBtn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-300');
+      } else {
+        collapsibleControls.classList.add('hidden');
+        collapsibleControls.classList.remove('flex');
+        toggleSettingsText.textContent = '调整设置 ▾';
+        toggleSettingsBtn.setAttribute('aria-expanded', 'false');
+        toggleSettingsBtn.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-300');
+        toggleSettingsBtn.classList.add('bg-slate-100', 'text-slate-800', 'border-slate-300');
+      }
+      requestAnimationFrame(updateMobileScale);
+    }
+
+    /**
+     * 移动端屏幕自适应等比缩放 A4 纸张（同步修正外层占位高度）
+     */
+    function updateMobileScale() {
+      if (a4Sheet.classList.contains('exporting-mode')) return;
+      const availableWidth = Math.max(280, window.innerWidth - 20);
+      const sheetRectWidth = a4Sheet.offsetWidth || 794;
+      const sheetRectHeight = a4Sheet.offsetHeight || 1123;
+
+      if (availableWidth < sheetRectWidth) {
+        const scale = availableWidth / sheetRectWidth;
+        a4Sheet.style.transform = `scale(${scale})`;
+        a4ScalerBox.style.width = `${availableWidth}px`;
+        a4ScalerBox.style.height = `${Math.ceil(sheetRectHeight * scale)}px`;
+      } else {
+        a4Sheet.style.transform = 'none';
+        a4ScalerBox.style.width = '210mm';
+        a4ScalerBox.style.height = '297mm';
+      }
+    }
+
+    /**
+     * 生成连续范围学号数组
+     */
+    function generateRangeList(start, end) {
+      const s = Number.isFinite(start) ? Math.floor(start) : 1;
+      const e = Number.isFinite(end) ? Math.floor(end) : 44;
+      const result = [];
+      if (s <= e) {
+        for (let i = s; i <= e && result.length < 400; i++) {
+          result.push(String(i));
+        }
+      } else {
+        for (let i = s; i >= e && result.length < 400; i--) {
+          result.push(String(i));
+        }
+      }
+      return result.length > 0 ? result : ['1'];
+    }
+
+    /**
+     * 解析自由/跳号列表字符串（支持空格、逗号、换行及 1~15, 17~44 简写）
+     */
+    function parseCustomTokens(rawText) {
+      if (!rawText || !rawText.trim()) return [];
+      const tokens = rawText
+        .split(/[\s,，、;；\n\r]+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const result = [];
+      for (const token of tokens) {
+        const rangeMatch = token.match(/^(-?\d+)\s*(?:~|-|至|\.\.)\s*(-?\d+)$/);
+        if (rangeMatch) {
+          const s = parseInt(rangeMatch[1], 10);
+          const e = parseInt(rangeMatch[2], 10);
+          const expanded = generateRangeList(s, e);
+          for (const item of expanded) {
+            if (result.length < 400) result.push(item);
+          }
+        } else if (result.length < 400) {
+          result.push(token);
+        }
+      }
+      return result;
+    }
+
+    /**
+     * 获取当前全局学号列表
+     */
+    function getGlobalBaseList() {
+      if (state.numMode === 'custom') {
+        const parsed = parseCustomTokens(state.customRaw);
+        if (parsed.length > 0) return parsed;
+      }
+      return generateRangeList(state.startNum, state.endNum);
+    }
+
+    /**
+     * 同步卡片数据结构
+     */
+    function syncAllCardLists(overwriteExisting = true) {
+      const [cols, rows] = state.layout.split('x').map(Number);
+      const totalCards = cols * rows;
+      const baseList = getGlobalBaseList();
+
+      for (let i = 0; i < totalCards; i++) {
+        if (overwriteExisting || !Array.isArray(state.cardLists[i])) {
+          state.cardLists[i] = [...baseList];
+        }
+        if (overwriteExisting || !state.cardTexts[i]) {
+          state.cardTexts[i] = {
+            date: state.batchDate || '',
+            task: state.batchTask || '',
+            remark: state.batchRemark || ''
+          };
+        }
+      }
+      state.cardLists.length = totalCards;
+      state.cardTexts.length = totalCards;
+    }
+
+    /**
+     * 渲染整张 A4 纸内容（卡片平铺或列表模式）
+     */
+    function renderSheet() {
+      // 1. 渲染整页顶部班级标题
+      if (state.pageTitle && state.pageTitle.trim() !== '') {
+        a4PageHeader.classList.remove('hidden');
+        a4PageHeader.style.textAlign = state.titleAlign;
+        if (a4PageHeader.textContent !== state.pageTitle) {
+          a4PageHeader.textContent = state.pageTitle;
+        }
+      } else {
+        a4PageHeader.classList.add('hidden');
+      }
+
+      // 2. 切换显示卡片模式或汇总表模式
+      if (state.viewMode === 'cards') {
+        cardsGrid.classList.remove('hidden');
+        rollTableWrapper.classList.add('hidden');
+        renderCardsGrid();
+      } else {
+        cardsGrid.classList.add('hidden');
+        rollTableWrapper.classList.remove('hidden');
+        renderRollTable();
+      }
+
+      requestAnimationFrame(updateMobileScale);
+    }
+
+    /**
+     * 渲染模式 A：卡片平铺网格
+     */
+    function renderCardsGrid() {
+      const [cols, rows] = state.layout.split('x').map(Number);
+      const totalCards = cols * rows;
+
+      cardsGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+      cardsGrid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+
+      let headerFontSize = '9.5pt';
+      let numFontSize = '9.5pt';
+      if (state.layout === '2x2') {
+        headerFontSize = '11.5pt';
+        numFontSize = '13pt';
+      } else if (state.layout === '2x3') {
+        headerFontSize = '10.5pt';
+        numFontSize = '11pt';
+      }
+
+      cardsGrid.innerHTML = '';
+
+      for (let cardIdx = 0; cardIdx < totalCards; cardIdx++) {
+        const list = state.cardLists[cardIdx] || getGlobalBaseList();
+        const textData = state.cardTexts[cardIdx] || { date: '', task: '', remark: '' };
+        const gridCols = state.colsPerRow;
+        const gridRows = Math.max(1, Math.ceil(list.length / gridCols));
+
+        let cardNumFontSize = numFontSize;
+        if (list.length > 70 || gridCols >= 12) {
+          cardNumFontSize = state.layout === '2x4' ? '8pt' : '9pt';
+        }
+
+        const card = document.createElement('div');
+        card.className = 'check-card group';
+
+        // 右上角单卡修改学号按钮（导出与打印时自动隐藏）
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'no-print no-export card-edit-btn opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 z-10 px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium shadow-sm transition cursor-pointer';
+        editBtn.textContent = '改本卡学号';
+        editBtn.addEventListener('click', () => openSingleCardModal(cardIdx));
+        card.appendChild(editBtn);
+
+        // 卡片顶部：日期 & 内容横线
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-end gap-2 w-full shrink-0';
+        topRow.style.fontSize = headerFontSize;
+
+        const dateGroup = document.createElement('div');
+        dateGroup.className = 'flex items-end shrink-0';
+        dateGroup.style.width = '36%';
+        const dateLabel = document.createElement('span');
+        dateLabel.className = 'font-bold text-gray-800 whitespace-nowrap select-none';
+        dateLabel.textContent = '日期：';
+        const dateField = document.createElement('div');
+        dateField.className = 'editable-line flex-1 text-gray-900 font-medium truncate';
+        dateField.contentEditable = 'true';
+        dateField.spellcheck = false;
+        dateField.textContent = textData.date;
+        dateField.addEventListener('input', () => {
+          state.cardTexts[cardIdx].date = dateField.textContent;
+        });
+        dateGroup.appendChild(dateLabel);
+        dateGroup.appendChild(dateField);
+
+        const taskGroup = document.createElement('div');
+        taskGroup.className = 'flex items-end flex-1 min-w-0';
+        const taskLabel = document.createElement('span');
+        taskLabel.className = 'font-bold text-gray-800 whitespace-nowrap select-none';
+        taskLabel.textContent = '内容：';
+        const taskField = document.createElement('div');
+        taskField.className = 'editable-line flex-1 text-gray-900 font-medium truncate';
+        taskField.contentEditable = 'true';
+        taskField.spellcheck = false;
+        taskField.textContent = textData.task;
+        taskField.addEventListener('input', () => {
+          state.cardTexts[cardIdx].task = taskField.textContent;
+        });
+        taskGroup.appendChild(taskLabel);
+        taskGroup.appendChild(taskField);
+
+        topRow.appendChild(dateGroup);
+        topRow.appendChild(taskGroup);
+        card.appendChild(topRow);
+
+        // 中部：学号矩阵
+        const numGrid = document.createElement('div');
+        numGrid.className = 'num-grid';
+        numGrid.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
+        numGrid.style.gridTemplateRows = `repeat(${gridRows}, minmax(0, 1fr))`;
+        numGrid.style.fontSize = cardNumFontSize;
+
+        list.forEach((rawItem) => {
+          const cell = document.createElement('div');
+          cell.className = 'num-cell';
+          if (state.numStyle === 'dashed') {
+            cell.classList.add('style-dashed');
+          }
+          cell.textContent = state.numStyle === 'dot' ? `${rawItem}.` : rawItem;
+          cell.title = '点击画红圈 / 取消';
+          cell.addEventListener('click', () => {
+            cell.classList.toggle('circled');
+          });
+          numGrid.appendChild(cell);
+        });
+
+        card.appendChild(numGrid);
+
+        // 底部：备注横线
+        if (state.showRemark) {
+          const bottomRow = document.createElement('div');
+          bottomRow.className = 'flex items-end w-full shrink-0';
+          bottomRow.style.fontSize = headerFontSize;
+
+          const remarkLabel = document.createElement('span');
+          remarkLabel.className = 'font-bold text-gray-700 whitespace-nowrap select-none';
+          remarkLabel.textContent = '备注：';
+
+          const remarkField = document.createElement('div');
+          remarkField.className = 'editable-line flex-1 text-gray-800 truncate';
+          remarkField.contentEditable = 'true';
+          remarkField.spellcheck = false;
+          remarkField.textContent = textData.remark;
+          remarkField.addEventListener('input', () => {
+            state.cardTexts[cardIdx].remark = remarkField.textContent;
+          });
+
+          bottomRow.appendChild(remarkLabel);
+          bottomRow.appendChild(remarkField);
+          card.appendChild(bottomRow);
+        }
+
+        cardsGrid.appendChild(card);
+      }
+    }
+
+    /**
+     * 渲染模式 B：列表模式（整页汇总表，采用方案 A 防压字标准斜线表头）
+     */
+    function renderRollTable() {
+      const studentList = getGlobalBaseList();
+      const colCount = Math.max(3, Math.min(35, state.dateCols || 15));
+
+      rollTableWrapper.innerHTML = '';
+      const table = document.createElement('table');
+      table.className = 'roll-table';
+
+      // 表头行：首列为方案 A 标准防压字斜线格（右上日期 / 左下学号），其余为可编辑日期列
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+
+      const cornerTh = document.createElement('th');
+      cornerTh.className = 'diagonal-header-cell';
+      cornerTh.innerHTML = `
+        <span class="diag-top-right">日期</span>
+        <span class="diag-bottom-left">学号</span>
+      `;
+      headerRow.appendChild(cornerTh);
+
+      for (let c = 0; c < colCount; c++) {
+        const th = document.createElement('th');
+        th.className = 'date-col-header';
+        th.contentEditable = 'true';
+        th.spellcheck = false;
+        th.textContent = state.tableHeaders[c] || '';
+        th.title = '点击填写日期';
+        th.addEventListener('input', () => {
+          state.tableHeaders[c] = th.textContent;
+        });
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // 表体：每行对应一个学号，自动均分整页剩余高度铺满 A4
+      const tbody = document.createElement('tbody');
+      studentList.forEach((stuNo, rIdx) => {
+        const tr = document.createElement('tr');
+
+        const idTd = document.createElement('td');
+        idTd.className = 'student-id-cell';
+        idTd.textContent = state.numStyle === 'dot' ? `${stuNo}.` : stuNo;
+        tr.appendChild(idTd);
+
+        for (let c = 0; c < colCount; c++) {
+          const td = document.createElement('td');
+          td.className = 'mark-grid-cell';
+          const key = `${rIdx}_${c}`;
+          const savedVal = state.tableMarks[key] || '';
+          td.textContent = savedVal;
+          if (savedVal) td.dataset.mark = savedVal;
+          td.title = '轻点切换 空 → ✓ → ✗';
+
+          td.addEventListener('click', () => {
+            const cur = state.tableMarks[key] || '';
+            let next = '';
+            if (cur === '') next = '✓';
+            else if (cur === '✓') next = '✗';
+            else next = '';
+
+            state.tableMarks[key] = next;
+            td.textContent = next;
+            if (next) td.dataset.mark = next;
+            else delete td.dataset.mark;
+          });
+
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      rollTableWrapper.appendChild(table);
+    }
+
+    /**
+     * 核心导出逻辑：临时解除移动端缩放并将当前 A4 渲染为高清 Canvas
+     */
+    async function captureA4Canvas() {
+      if (typeof window.html2canvas !== 'function') {
+        throw new Error('图像渲染组件尚未加载完成，请稍后重试或使用“打印 A4”');
+      }
+
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+
+      const prevTransform = a4Sheet.style.transform;
+      a4Sheet.classList.add('exporting-mode');
+      a4Sheet.style.transform = 'none';
+
+      try {
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const canvas = await window.html2canvas(a4Sheet, {
+          scale: 2.5,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          width: a4Sheet.offsetWidth,
+          height: a4Sheet.offsetHeight
+        });
+        return canvas;
+      } finally {
+        a4Sheet.classList.remove('exporting-mode');
+        a4Sheet.style.transform = prevTransform;
+        updateMobileScale();
+      }
+    }
+
+    /**
+     * 触发下载并打开移动端/沙盒友好型预览弹窗
+     */
+    function openExportModalWithResult({ title, hint, previewDataUrl, downloadUrl, fileName }) {
+      if (state.lastExportUrl && state.lastExportUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(state.lastExportUrl);
+      }
+      state.lastExportUrl = downloadUrl;
+
+      exportModalTitle.textContent = title;
+      exportModalHint.textContent = hint;
+      exportLoadingSpinner.classList.add('hidden');
+      exportPreviewImg.src = previewDataUrl;
+      exportPreviewImg.classList.remove('hidden');
+
+      directDownloadLink.href = downloadUrl;
+      directDownloadLink.download = fileName;
+
+      try {
+        const tempLink = document.createElement('a');
+        tempLink.href = downloadUrl;
+        tempLink.download = fileName;
+        tempLink.style.display = 'none';
+        document.body.appendChild(tempLink);
+        tempLink.click();
+        document.body.removeChild(tempLink);
+      } catch (err) {
+        // 沙盒限制自动下载时回退到弹窗按钮与长按保存
+      }
+    }
+
+    /**
+     * 一键导出高清图片 (PNG)
+     */
+    async function handleExportImage() {
+      exportModalTitle.textContent = '正在生成高清 A4 图片...';
+      exportModalHint.textContent = '高分辨率渲染中，请稍候';
+      exportLoadingSpinner.classList.remove('hidden');
+      exportPreviewImg.classList.add('hidden');
+      exportModal.classList.remove('hidden');
+
+      try {
+        const canvas = await captureA4Canvas();
+        const dataUrl = canvas.toDataURL('image/png');
+        const safeTitle = (state.pageTitle || '一年级 4 班').trim().replace(/[\\/:*?"<>|]/g, '_') || '一年级 4 班';
+        const fileName = `ClassRoll-${safeTitle}.png`;
+
+        openExportModalWithResult({
+          title: '高清 A4 图片已生成',
+          hint: '长按图片可保存或转发微信打印，也可点击下方“立即下载文件”',
+          previewDataUrl: dataUrl,
+          downloadUrl: dataUrl,
+          fileName
+        });
+      } catch (error) {
+        exportModal.classList.add('hidden');
+        showToast(error.message || '导出图片失败，请尝试“打印 A4”');
+      }
+    }
+
+    /**
+     * 一键导出标准 A4 PDF 文件 (210mm x 297mm)
+     */
+    async function handleExportPdf() {
+      exportModalTitle.textContent = '正在生成标准 A4 PDF...';
+      exportModalHint.textContent = '正在排版 210mm × 297mm 打印文档，请稍候';
+      exportLoadingSpinner.classList.remove('hidden');
+      exportPreviewImg.classList.add('hidden');
+      exportModal.classList.remove('hidden');
+
+      try {
+        const canvas = await captureA4Canvas();
+        const previewImgData = canvas.toDataURL('image/jpeg', 0.96);
+        const safeTitle = (state.pageTitle || '一年级 4 班').trim().replace(/[\\/:*?"<>|]/g, '_') || '一年级 4 班';
+        const fileName = `ClassRoll-${safeTitle}.pdf`;
+
+        const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        if (typeof jsPDFCtor !== 'function') {
+          throw new Error('PDF 组件未加载完成，请稍后重试或点击“导出图片”');
+        }
+
+        const pdf = new jsPDFCtor({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        pdf.addImage(previewImgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        const pdfBlob = pdf.output('blob');
+        const pdfBlobUrl = URL.createObjectURL(pdfBlob);
+
+        openExportModalWithResult({
+          title: '标准 A4 PDF 已生成',
+          hint: '已尝试自动下载 PDF；长按图片可保存或转发微信打印',
+          previewDataUrl: previewImgData,
+          downloadUrl: pdfBlobUrl,
+          fileName
+        });
+      } catch (error) {
+        exportModal.classList.add('hidden');
+        showToast(error.message || '导出 PDF 失败，请重试');
+      }
+    }
+
+    /**
+     * 切换学号输入模式（连续范围 / 自由跳号）
+     */
+    function switchNumMode(newMode) {
+      state.numMode = newMode;
+      if (newMode === 'range') {
+        modeRangeBtn.className = 'px-2 py-0.5 rounded text-xs font-semibold bg-white text-blue-600 shadow-sm transition cursor-pointer';
+        modeCustomBtn.className = 'px-2 py-0.5 rounded text-xs font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer';
+        rangeControls.classList.remove('hidden');
+        customControls.classList.add('hidden');
+      } else {
+        modeCustomBtn.className = 'px-2 py-0.5 rounded text-xs font-semibold bg-white text-blue-600 shadow-sm transition cursor-pointer';
+        modeRangeBtn.className = 'px-2 py-0.5 rounded text-xs font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer';
+        customControls.classList.remove('hidden');
+        rangeControls.classList.add('hidden');
+      }
+    }
+
+    /**
+     * 打开单卡独立修改学号弹窗
+     */
+    function openSingleCardModal(cardIdx) {
+      state.editingCardIndex = cardIdx;
+      modalCardTitle.textContent = `自定义第 ${cardIdx + 1} 张卡片学号`;
+      modalRangeInput.value = '';
+      const currentList = state.cardLists[cardIdx] || getGlobalBaseList();
+      modalListTextarea.value = currentList.join(' ');
+      singleCardModal.classList.remove('hidden');
+    }
+
+    function closeSingleCardModal() {
+      singleCardModal.classList.add('hidden');
+      state.editingCardIndex = null;
+    }
+
+    // 移动端折叠按钮事件
+    toggleSettingsBtn.addEventListener('click', () => {
+      setMobileSettingsOpen(!state.mobileSettingsOpen);
+    });
+    collapseSettingsBottomBtn.addEventListener('click', () => {
+      setMobileSettingsOpen(false);
+    });
+
+    // 视图模式切换（卡片平铺 <-> 列表模式汇总表）
+    viewModeSelect.addEventListener('change', (e) => {
+      state.viewMode = e.target.value;
+      if (state.viewMode === 'cards') {
+        cardModeControls.classList.remove('hidden');
+        tableModeControls.classList.add('hidden');
+        batchCardFields.classList.remove('hidden');
+        batchTableFields.classList.add('hidden');
+      } else {
+        cardModeControls.classList.add('hidden');
+        tableModeControls.classList.remove('hidden');
+        batchCardFields.classList.add('hidden');
+        batchTableFields.classList.remove('hidden');
+      }
+      renderSheet();
+    });
+
+    layoutSelect.addEventListener('change', (e) => {
+      state.layout = e.target.value;
+      syncAllCardLists(false);
+      renderSheet();
+    });
+
+    colsPerRowSelect.addEventListener('change', (e) => {
+      state.colsPerRow = parseInt(e.target.value, 10) || 10;
+      renderSheet();
+    });
+
+    numStyleSelect.addEventListener('change', (e) => {
+      state.numStyle = e.target.value;
+      renderSheet();
+    });
+
+    cutLineToggle.addEventListener('change', (e) => {
+      state.showCutLines = e.target.checked;
+      a4Sheet.classList.toggle('show-cut-lines', state.showCutLines);
+    });
+
+    remarkToggle.addEventListener('change', (e) => {
+      state.showRemark = e.target.checked;
+      renderSheet();
+    });
+
+    dateColsInput.addEventListener('change', (e) => {
+      const val = parseInt(e.target.value, 10);
+      state.dateCols = Number.isFinite(val) ? Math.max(3, Math.min(35, val)) : 15;
+      dateColsInput.value = state.dateCols;
+      renderSheet();
+    });
+
+    pageTitleInput.addEventListener('input', (e) => {
+      state.pageTitle = e.target.value;
+      renderSheet();
+    });
+
+    titleAlignBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.titleAlign = btn.dataset.align;
+        titleAlignBtns.forEach((b) => {
+          const isActive = b.dataset.align === state.titleAlign;
+          b.className = isActive
+            ? 'title-align-btn px-2 py-0.5 rounded text-xs font-semibold bg-white text-blue-600 shadow-sm transition cursor-pointer'
+            : 'title-align-btn px-2 py-0.5 rounded text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer';
+        });
+        renderSheet();
+      });
+    });
+
+    a4PageHeader.addEventListener('input', () => {
+      state.pageTitle = a4PageHeader.textContent;
+      pageTitleInput.value = state.pageTitle;
+    });
+
+    modeRangeBtn.addEventListener('click', () => switchNumMode('range'));
+    modeCustomBtn.addEventListener('click', () => switchNumMode('custom'));
+
+    applyRangeBtn.addEventListener('click', () => {
+      const s = parseInt(startNumInput.value, 10);
+      const e = parseInt(endNumInput.value, 10);
+      state.startNum = Number.isFinite(s) ? s : 1;
+      state.endNum = Number.isFinite(e) ? e : 44;
+      syncAllCardLists(true);
+      renderSheet();
+      showToast(`已更新学号：${state.startNum} ~ ${state.endNum}`);
+    });
+
+    applyCustomBtn.addEventListener('click', () => {
+      state.customRaw = customListInput.value;
+      syncAllCardLists(true);
+      renderSheet();
+      showToast('已应用自定义学号列表');
+    });
+
+    toggleBatchBtn.addEventListener('click', () => {
+      batchPanel.classList.toggle('hidden');
+      requestAnimationFrame(updateMobileScale);
+    });
+
+    applyBatchCardBtn.addEventListener('click', () => {
+      state.batchDate = batchDateInput.value;
+      state.batchTask = batchTaskInput.value;
+      state.batchRemark = batchRemarkInput.value;
+      state.cardTexts = state.cardTexts.map(() => ({
+        date: state.batchDate,
+        task: state.batchTask,
+        remark: state.batchRemark
+      }));
+      renderSheet();
+      showToast('已批量填入全部卡片');
+    });
+
+    applyBatchTableBtn.addEventListener('click', () => {
+      const tokens = batchTableDatesInput.value
+        .split(/[\s,，、;；]+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      for (let i = 0; i < state.dateCols; i++) {
+        if (tokens[i] !== undefined) {
+          state.tableHeaders[i] = tokens[i];
+        }
+      }
+      renderSheet();
+      showToast('已填入表头日期');
+    });
+
+    // 清空重置
+    clearMarksBtn.addEventListener('click', () => {
+      state.batchDate = '';
+      state.batchTask = '';
+      state.batchRemark = '';
+      state.tableHeaders = [];
+      state.tableMarks = {};
+      state.pageTitle = '一年级 4 班';
+      state.titleAlign = 'center';
+      pageTitleInput.value = '一年级 4 班';
+      titleAlignBtns.forEach((b) => {
+        const isActive = b.dataset.align === 'center';
+        b.className = isActive
+          ? 'title-align-btn px-2 py-0.5 rounded text-xs font-semibold bg-white text-blue-600 shadow-sm transition cursor-pointer'
+          : 'title-align-btn px-2 py-0.5 rounded text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer';
+      });
+      batchDateInput.value = '';
+      batchTaskInput.value = '';
+      batchRemarkInput.value = '';
+      batchTableDatesInput.value = '';
+      syncAllCardLists(true);
+      renderSheet();
+      showToast('已清空标记并恢复默认设置');
+    });
+
+    // 导出与打印绑定
+    exportPdfBtn.addEventListener('click', handleExportPdf);
+    exportImgBtn.addEventListener('click', handleExportImage);
+    printBtn.addEventListener('click', () => {
+      a4Sheet.style.transform = 'none';
+      window.print();
+      setTimeout(updateMobileScale, 300);
+    });
+
+    // 关闭导出预览弹窗
+    function closeExportModal() {
+      exportModal.classList.add('hidden');
+    }
+    closeExportModalBtn.addEventListener('click', closeExportModal);
+    closeExportModalFooterBtn.addEventListener('click', closeExportModal);
+    exportModal.addEventListener('click', (e) => {
+      if (e.target === exportModal) closeExportModal();
+    });
+
+    // 单卡自定义弹窗事件
+    modalGenRangeBtn.addEventListener('click', () => {
+      const parsed = parseCustomTokens(modalRangeInput.value);
+      if (parsed.length > 0) {
+        modalListTextarea.value = parsed.join(' ');
+      }
+    });
+
+    saveModalBtn.addEventListener('click', () => {
+      if (state.editingCardIndex !== null) {
+        const parsed = parseCustomTokens(modalListTextarea.value);
+        if (parsed.length > 0) {
+          state.cardLists[state.editingCardIndex] = parsed;
+          renderSheet();
+          showToast(`已更新第 ${state.editingCardIndex + 1} 张卡片学号`);
+        }
+      }
+      closeSingleCardModal();
+    });
+
+    closeModalBtn.addEventListener('click', closeSingleCardModal);
+    cancelModalBtn.addEventListener('click', closeSingleCardModal);
+    singleCardModal.addEventListener('click', (e) => {
+      if (e.target === singleCardModal) closeSingleCardModal();
+    });
+
+    // 监听窗口大小与手机横竖屏切换
+    window.addEventListener('resize', updateMobileScale);
+
+    // 初始化启动
+    window.addEventListener('DOMContentLoaded', () => {
+      syncAllCardLists(true);
+      renderSheet();
+    });
+  </script>
+</body>
+</html>
