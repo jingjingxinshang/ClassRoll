@@ -22,7 +22,7 @@
     /* 移动端等比缩放外层包装器 */
     .a4-scaler-box {
       position: relative;
-      margin: 14px auto 28px;
+      margin: 10px auto 24px;
       width: 210mm;
       height: 297mm;
       display: flex;
@@ -35,7 +35,7 @@
       width: 210mm;
       min-height: 297mm;
       height: 297mm;
-      padding: 8mm 8mm 7mm 8mm;
+      padding: 8mm 7.5mm 7mm 7.5mm;
       background: #ffffff;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
       box-sizing: border-box;
@@ -80,14 +80,14 @@
       flex: 1 1 auto;
       min-height: 0;
       display: grid;
-      gap: 5.5mm;
+      gap: 5mm;
       width: 100%;
     }
 
     .check-card {
       border: 1.5px solid #374151;
       border-radius: 6px;
-      padding: 3.2mm 3.8mm;
+      padding: 3mm 3.4mm;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -101,7 +101,7 @@
     .show-cut-lines .check-card::after {
       content: '';
       position: absolute;
-      inset: -2.75mm;
+      inset: -2.5mm;
       border: 1px dashed #9ca3af;
       pointer-events: none;
     }
@@ -109,9 +109,9 @@
     /* 可编辑横线 */
     .editable-line {
       border-bottom: 1.5px solid #374151;
-      min-height: 1.4em;
-      line-height: 1.35;
-      padding: 0 4px;
+      min-height: 1.35em;
+      line-height: 1.3;
+      padding: 0 3px;
       outline: none;
       transition: background-color 0.15s ease;
     }
@@ -119,7 +119,7 @@
       background-color: #eff6ff;
     }
 
-    /* 学号矩阵网格 */
+    /* 学号矩阵网格：增加明确列间距，防止两位数连成一片 */
     .num-grid {
       display: grid !important;
       grid-auto-flow: row;
@@ -128,8 +128,9 @@
       min-height: 0;
       align-items: center;
       justify-items: center;
-      margin: 1.2mm 0;
-      gap: 1px;
+      margin: 1.4mm 0;
+      column-gap: 3.5px;
+      row-gap: 1.5px;
     }
 
     .num-cell {
@@ -150,12 +151,17 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    /* 两位数紧凑字距优化，保留充足数字呼吸感 */
+    .num-cell.multi-digit {
+      letter-spacing: -0.35px;
+    }
+
     /* 浅灰虚线圈样式 */
     .num-cell.style-dashed::after {
       content: '';
       position: absolute;
-      width: 23px;
-      height: 23px;
+      width: 22px;
+      height: 22px;
       border: 1px dashed #cbd5e1;
       border-radius: 9999px;
       pointer-events: none;
@@ -165,8 +171,8 @@
     .num-cell.circled::before {
       content: '';
       position: absolute;
-      width: 24px;
-      height: 24px;
+      width: 23px;
+      height: 23px;
       border: 2px solid #dc2626;
       border-radius: 9999px;
       pointer-events: none;
@@ -274,20 +280,29 @@
       color: #16a34a;
       cursor: pointer;
       user-select: none;
-      outline: none;
-      -webkit-tap-highlight-color: transparent;
+      transition: background-color 0.12s ease;
     }
-    .mark-grid-cell:focus {
-      background-color: #eff6ff;
+    .mark-grid-cell:hover {
+      background-color: #f0fdf4;
     }
     .mark-grid-cell[data-mark="✗"] {
       color: #dc2626;
     }
 
-    /* 触摸屏设备直接显示单卡修改按钮，无需 hover */
+    /* 触摸屏设备直接显示轻量小图标按钮，不遮挡卡片文字横线 */
     @media (hover: none) {
       .card-edit-btn {
-        opacity: 1 !important;
+        opacity: 0.85 !important;
+      }
+    }
+
+    /* 预览舞台容器移动端边距最大化 */
+    .preview-stage {
+      padding: 10px 8px 24px;
+    }
+    @media (min-width: 769px) {
+      .preview-stage {
+        padding: 14px 16px 28px;
       }
     }
 
@@ -343,52 +358,49 @@
 
   <!-- 顶部控制面板（电脑端全展开；移动端默认收起，仅留预览、导出/打印与“调整设置”按钮） -->
   <header class="no-print bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-2">
+    <div class="max-w-7xl mx-auto px-2.5 sm:px-4 py-1.5 sm:py-2.5 flex flex-col gap-1.5 sm:gap-2">
       
-      <!-- 始终可见的主操作栏：品牌标识 + 调整设置切换（移动端） + 导出/打印主按钮 -->
-      <div class="flex flex-wrap items-center justify-between gap-2">
+      <!-- 始终可见的主操作栏：移动端单行紧凑排布 -->
+      <div class="flex items-center justify-between gap-1.5 sm:gap-2">
         <!-- ClassRoll 品牌区 -->
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
             </svg>
           </div>
           <div>
             <div class="flex items-center gap-1.5">
-              <h1 class="text-sm sm:text-base font-bold text-gray-900 leading-tight">ClassRoll</h1>
+              <h1 class="text-xs sm:text-base font-bold text-gray-900 leading-tight tracking-tight">ClassRoll</h1>
               <span class="hidden sm:inline-block text-[11px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">A4 学号核对卡</span>
             </div>
             <p class="text-[11px] text-gray-500 hidden md:block">班级学号进度核对卡 · 方便老师画圈标记</p>
           </div>
         </div>
 
-        <!-- 右侧核心动作组：移动端设置折叠按钮 + 导出 PDF / 导出图片 / 打印 A4 -->
-        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+        <!-- 右侧核心动作组：移动端单行紧凑适配 -->
+        <div class="flex items-center gap-1 sm:gap-2 text-[11px] sm:text-sm overflow-x-auto no-scrollbar">
           <!-- 移动端专属：展开/收起所有修改设置按钮 -->
-          <button id="toggleSettingsBtn" type="button" aria-expanded="false" class="md:hidden px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-[0.99] text-slate-800 border border-slate-300 font-semibold flex items-center gap-1 transition cursor-pointer">
-            <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
-            </svg>
-            <span id="toggleSettingsText">调整设置 ▾</span>
+          <button id="toggleSettingsBtn" type="button" aria-expanded="false" class="md:hidden px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-[0.99] text-slate-800 border border-slate-300 font-semibold flex items-center gap-0.5 whitespace-nowrap shrink-0 transition cursor-pointer">
+            <span id="toggleSettingsText">设置 ▾</span>
           </button>
 
-          <button id="exportPdfBtn" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 transition cursor-pointer">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <button id="exportPdfBtn" type="button" class="px-2 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 whitespace-nowrap shrink-0 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 hidden xs:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             <span>导出 PDF</span>
           </button>
 
-          <button id="exportImgBtn" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 transition cursor-pointer">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <button id="exportImgBtn" type="button" class="px-2 sm:px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 whitespace-nowrap shrink-0 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 hidden xs:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
             <span>导出图片</span>
           </button>
 
-          <button id="printBtn" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 transition cursor-pointer">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <button id="printBtn" type="button" class="px-2 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold shadow-sm flex items-center gap-1 whitespace-nowrap shrink-0 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 hidden xs:inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
             </svg>
             <span>打印 A4</span>
@@ -547,7 +559,7 @@
 
         <!-- 移动端专属：设置面板底部一键收起按钮 -->
         <button id="collapseSettingsBottomBtn" type="button" class="md:hidden w-full py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200 transition cursor-pointer">
-          ▲ 收起设置
+          ▲ 收起设置面板
         </button>
       </div>
 
@@ -555,7 +567,7 @@
   </header>
 
   <!-- A4 纸张自适应缩放预览区 -->
-  <main class="flex-1 w-full overflow-x-hidden flex justify-center items-start px-2 sm:px-4">
+  <main id="previewStage" class="preview-stage flex-1 w-full overflow-x-hidden flex justify-center items-start">
     <div id="a4ScalerBox" class="a4-scaler-box">
       <div id="a4Sheet" class="a4-sheet show-cut-lines">
         <!-- 整张 A4 纸顶部班级标题 -->
@@ -667,6 +679,7 @@
     };
 
     // DOM 元素引用
+    const previewStage = document.getElementById('previewStage');
     const a4ScalerBox = document.getElementById('a4ScalerBox');
     const a4Sheet = document.getElementById('a4Sheet');
     const a4PageHeader = document.getElementById('a4PageHeader');
@@ -761,14 +774,14 @@
       if (isOpen) {
         collapsibleControls.classList.remove('hidden');
         collapsibleControls.classList.add('flex');
-        toggleSettingsText.textContent = '收起设置 ▲';
+        toggleSettingsText.textContent = '收起 ▲';
         toggleSettingsBtn.setAttribute('aria-expanded', 'true');
         toggleSettingsBtn.classList.remove('bg-slate-100', 'text-slate-800', 'border-slate-300');
         toggleSettingsBtn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-300');
       } else {
         collapsibleControls.classList.add('hidden');
         collapsibleControls.classList.remove('flex');
-        toggleSettingsText.textContent = '调整设置 ▾';
+        toggleSettingsText.textContent = '设置 ▾';
         toggleSettingsBtn.setAttribute('aria-expanded', 'false');
         toggleSettingsBtn.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-300');
         toggleSettingsBtn.classList.add('bg-slate-100', 'text-slate-800', 'border-slate-300');
@@ -777,23 +790,27 @@
     }
 
     /**
-     * 移动端屏幕自适应等比缩放 A4 纸张（同步修正外层占位高度）
+     * 移动端屏幕自适应等比缩放 A4 纸张（铺满约 96% 屏幕宽度，无多余左右留白）
      */
     function updateMobileScale() {
       if (a4Sheet.classList.contains('exporting-mode')) return;
-      const availableWidth = Math.max(280, window.innerWidth - 20);
+      const stageWidth = previewStage ? previewStage.clientWidth : window.innerWidth;
+      const horizontalPadding = window.innerWidth <= 768 ? 16 : 32;
+      const availableWidth = Math.max(280, stageWidth - horizontalPadding);
       const sheetRectWidth = a4Sheet.offsetWidth || 794;
       const sheetRectHeight = a4Sheet.offsetHeight || 1123;
 
       if (availableWidth < sheetRectWidth) {
         const scale = availableWidth / sheetRectWidth;
         a4Sheet.style.transform = `scale(${scale})`;
-        a4ScalerBox.style.width = `${availableWidth}px`;
+        a4ScalerBox.style.width = `${Math.floor(sheetRectWidth * scale)}px`;
         a4ScalerBox.style.height = `${Math.ceil(sheetRectHeight * scale)}px`;
+        a4ScalerBox.style.margin = '0 auto';
       } else {
         a4Sheet.style.transform = 'none';
         a4ScalerBox.style.width = '210mm';
         a4ScalerBox.style.height = '297mm';
+        a4ScalerBox.style.margin = '0 auto';
       }
     }
 
@@ -917,14 +934,15 @@
       cardsGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
       cardsGrid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
 
-      let headerFontSize = '9.5pt';
-      let numFontSize = '9.5pt';
+      // 优化各级平铺字号，保障 11~44 两位数之间清晰留白
+      let headerFontSize = '9pt';
+      let numFontSize = '9pt';
       if (state.layout === '2x2') {
-        headerFontSize = '11.5pt';
-        numFontSize = '13pt';
+        headerFontSize = '11pt';
+        numFontSize = '12pt';
       } else if (state.layout === '2x3') {
-        headerFontSize = '10.5pt';
-        numFontSize = '11pt';
+        headerFontSize = '10pt';
+        numFontSize = '10.5pt';
       }
 
       cardsGrid.innerHTML = '';
@@ -937,28 +955,20 @@
 
         let cardNumFontSize = numFontSize;
         if (list.length > 70 || gridCols >= 12) {
-          cardNumFontSize = state.layout === '2x4' ? '8pt' : '9pt';
+          cardNumFontSize = state.layout === '2x4' ? '7.5pt' : '8.5pt';
         }
 
         const card = document.createElement('div');
         card.className = 'check-card group';
 
-        // 右上角单卡修改学号按钮（导出与打印时自动隐藏）
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'no-print no-export card-edit-btn opacity-0 group-hover:opacity-100 focus:opacity-100 absolute top-1.5 right-1.5 z-10 px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium shadow-sm transition cursor-pointer';
-        editBtn.textContent = '改本卡学号';
-        editBtn.addEventListener('click', () => openSingleCardModal(cardIdx));
-        card.appendChild(editBtn);
-
-        // 卡片顶部：日期 & 内容横线
+        // 卡片顶部：日期 & 内容横线（完全不被任何按钮遮挡）
         const topRow = document.createElement('div');
         topRow.className = 'flex items-end gap-2 w-full shrink-0';
         topRow.style.fontSize = headerFontSize;
 
         const dateGroup = document.createElement('div');
         dateGroup.className = 'flex items-end shrink-0';
-        dateGroup.style.width = '36%';
+        dateGroup.style.width = '37%';
         const dateLabel = document.createElement('span');
         dateLabel.className = 'font-bold text-gray-800 whitespace-nowrap select-none';
         dateLabel.textContent = '日期：';
@@ -999,10 +1009,14 @@
         numGrid.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
         numGrid.style.gridTemplateRows = `repeat(${gridRows}, minmax(0, 1fr))`;
         numGrid.style.fontSize = cardNumFontSize;
+        numGrid.style.columnGap = gridCols >= 10 ? '3px' : '5px';
 
         list.forEach((rawItem) => {
           const cell = document.createElement('div');
           cell.className = 'num-cell';
+          if (String(rawItem).length >= 2) {
+            cell.classList.add('multi-digit');
+          }
           if (state.numStyle === 'dashed') {
             cell.classList.add('style-dashed');
           }
@@ -1016,11 +1030,14 @@
 
         card.appendChild(numGrid);
 
-        // 底部：备注横线
+        // 底部：备注横线 + 右下角精致小图标（不遮挡顶部日期/内容横线，打印与导出时自动隐藏）
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'flex items-end justify-between gap-1.5 w-full shrink-0';
+        bottomRow.style.fontSize = headerFontSize;
+
         if (state.showRemark) {
-          const bottomRow = document.createElement('div');
-          bottomRow.className = 'flex items-end w-full shrink-0';
-          bottomRow.style.fontSize = headerFontSize;
+          const remarkGroup = document.createElement('div');
+          remarkGroup.className = 'flex items-end flex-1 min-w-0';
 
           const remarkLabel = document.createElement('span');
           remarkLabel.className = 'font-bold text-gray-700 whitespace-nowrap select-none';
@@ -1035,11 +1052,28 @@
             state.cardTexts[cardIdx].remark = remarkField.textContent;
           });
 
-          bottomRow.appendChild(remarkLabel);
-          bottomRow.appendChild(remarkField);
-          card.appendChild(bottomRow);
+          remarkGroup.appendChild(remarkLabel);
+          remarkGroup.appendChild(remarkField);
+          bottomRow.appendChild(remarkGroup);
+        } else {
+          const spacer = document.createElement('div');
+          spacer.className = 'flex-1';
+          bottomRow.appendChild(spacer);
         }
 
+        // 精致不突兀的自定义本卡学号小图标按钮
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.title = `自定义第 ${cardIdx + 1} 张卡片学号`;
+        editBtn.className = 'no-print no-export card-edit-btn opacity-0 group-hover:opacity-90 focus:opacity-100 shrink-0 w-5 h-5 rounded bg-slate-100 hover:bg-blue-600 text-slate-600 hover:text-white border border-slate-300 hover:border-blue-600 flex items-center justify-center text-[11px] leading-none transition cursor-pointer';
+        editBtn.innerHTML = '✎';
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openSingleCardModal(cardIdx);
+        });
+        bottomRow.appendChild(editBtn);
+
+        card.appendChild(bottomRow);
         cardsGrid.appendChild(card);
       }
     }
@@ -1191,7 +1225,7 @@
     /**
      * 一键导出高清图片 (PNG)
      */
-    async function handleExportImage() {
+    async function handleExportImage(customNotice) {
       exportModalTitle.textContent = '正在生成高清 A4 图片...';
       exportModalHint.textContent = '高分辨率渲染中，请稍候';
       exportLoadingSpinner.classList.remove('hidden');
@@ -1205,8 +1239,8 @@
         const fileName = `ClassRoll-${safeTitle}.png`;
 
         openExportModalWithResult({
-          title: '高清 A4 图片已生成',
-          hint: '长按图片可保存或转发微信打印，也可点击下方“立即下载文件”',
+          title: customNotice ? '已为您生成高清 A4 打印图' : '高清 A4 图片已生成',
+          hint: customNotice || '长按图片可保存或转发微信打印，也可点击下方“立即下载文件”',
           previewDataUrl: dataUrl,
           downloadUrl: dataUrl,
           fileName
@@ -1451,13 +1485,18 @@
       batchTableDatesInput.value = '';
       syncAllCardLists(true);
       renderSheet();
-      showToast('已清空标记并恢复默认设置');
+      showToast('已清空并恢复默认设置');
     });
 
-    // 导出与打印绑定
+    // 导出与打印绑定（检测微信内置浏览器自动转为高清图片导出引导）
     exportPdfBtn.addEventListener('click', handleExportPdf);
-    exportImgBtn.addEventListener('click', handleExportImage);
+    exportImgBtn.addEventListener('click', () => handleExportImage());
     printBtn.addEventListener('click', () => {
+      const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+      if (isWeChat) {
+        handleExportImage('微信内置浏览器不支持直接调用系统打印，已为您生成高清 A4 图片，长按保存或转发给微信文件传输助手即可打印！');
+        return;
+      }
       a4Sheet.style.transform = 'none';
       window.print();
       setTimeout(updateMobileScale, 300);
